@@ -1,5 +1,5 @@
 // components/screens/ChildReportScreen.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,35 +7,71 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useChild } from '../context/ChildContext';
 
 export default function ChildReportScreen({ route, navigation }) {
   const { childId } = route.params;
   const { childrenList, getChildReport } = useChild();
+  const [report, setReport] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const report = getChildReport(childId);
-  const child = childrenList.find(c => c.id === childId);
+  // Load report whenever childrenList changes or manually refreshed
+  useEffect(() => {
+    console.log('🔄 Loading report for child:', childId);
+    const childReport = getChildReport(childId);
+    console.log('📊 Report data:', {
+      hasReport: !!childReport,
+      totalSessions: childReport?.totalSessions,
+      lastSession: childReport?.lastSession?.date
+    });
+    setReport(childReport);
+  }, [childId, childrenList, refreshKey]); // Add refreshKey to dependencies
 
-  if (!report || !child) {
-    return (
-      <View style={styles.container}>
-        <Text>Child not found</Text>
-      </View>
-    );
-  }
+  const onRefresh = () => {
+    console.log('🔄 Manual refresh triggered');
+    setRefreshing(true);
+    // Force re-render by updating refreshKey
+    setRefreshKey(prev => prev + 1);
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const forceRefresh = () => {
+    console.log('🔄 Force refresh button pressed');
+    setRefreshKey(prev => prev + 1);
+    Alert.alert("Refreshed", "Report data has been refreshed.");
+  };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    if (!dateString) return 'Unknown date';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   const shareReport = () => {
     Alert.alert("Share Report", "Report sharing feature would be implemented here");
   };
+
+  if (!report) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Loading report...</Text>
+        <Text style={styles.loadingSubtext}>Child ID: {childId}</Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={forceRefresh}>
+          <Text style={styles.refreshButtonText}>Refresh Report</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const getCategoryName = (categoryId) => {
     switch(categoryId) {
@@ -46,12 +82,32 @@ export default function ChildReportScreen({ route, navigation }) {
     }
   };
 
+  // Calculate additional stats
+  const totalGoals = Object.values(report.childInfo.goalsProgress || {}).reduce((total, category) => {
+    return total + Object.values(category).filter(goal => goal.unlocked).length;
+  }, 0);
+
+  const completedGoals = Object.values(report.childInfo.goalsProgress || {}).reduce((total, category) => {
+    return total + Object.values(category).filter(goal => goal.passed).length;
+  }, 0);
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.childName}>{child.childName}</Text>
-        <Text style={styles.mrNumber}>MR: {child.mrNumber}</Text>
+        <Text style={styles.childName}>{report.childInfo.childName}</Text>
+        <Text style={styles.mrNumber}>MR: {report.childInfo.mrNumber}</Text>
+        <Text style={styles.lastUpdated}>
+          Report generated: {formatDate(new Date())}
+        </Text>
+        <Text style={styles.dataStatus}>
+          Data: {report.totalSessions} sessions • {completedGoals}/{totalGoals} goals completed
+        </Text>
       </View>
 
       {/* Basic Info */}
@@ -60,19 +116,19 @@ export default function ChildReportScreen({ route, navigation }) {
         <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Age/DOB</Text>
-            <Text style={styles.infoValue}>{child.dob || 'Not specified'}</Text>
+            <Text style={styles.infoValue}>{report.childInfo.dob || 'Not specified'}</Text>
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Gender</Text>
-            <Text style={styles.infoValue}>{child.gender || 'Not specified'}</Text>
+            <Text style={styles.infoValue}>{report.childInfo.gender || 'Not specified'}</Text>
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Parent</Text>
-            <Text style={styles.infoValue}>{child.parentName || 'Not specified'}</Text>
+            <Text style={styles.infoValue}>{report.childInfo.parentName || 'Not specified'}</Text>
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Since</Text>
-            <Text style={styles.infoValue}>{formatDate(child.createdAt)}</Text>
+            <Text style={styles.infoValue}>{formatDate(report.childInfo.createdAt)}</Text>
           </View>
         </View>
       </View>
@@ -93,12 +149,16 @@ export default function ChildReportScreen({ route, navigation }) {
             <Text style={styles.progressNumber}>{report.successRate}%</Text>
             <Text style={styles.progressLabel}>Success Rate</Text>
           </View>
+          <View style={[styles.progressItem, styles.goalsProgress]}>
+            <Text style={styles.progressNumber}>{completedGoals}/{totalGoals}</Text>
+            <Text style={styles.progressLabel}>Goals Completed</Text>
+          </View>
         </View>
       </View>
 
       {/* Recent Sessions */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Sessions</Text>
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
         {report.lastSession ? (
           <View style={styles.lastSession}>
             <Text style={styles.sessionTitle}>Last Session</Text>
@@ -111,13 +171,16 @@ export default function ChildReportScreen({ route, navigation }) {
               </Text>
             </Text>
             <Text style={styles.sessionDetail}>
-              Conducted by: {report.lastSession.doctorName}
+              Therapist: {report.lastSession.doctorName}
             </Text>
             <Text style={styles.sessionDetail}>
               Activities: {report.lastSession.passCount}/5 passed
             </Text>
             <Text style={styles.sessionDetail}>
               Category: {getCategoryName(report.lastSession.categoryId)}
+            </Text>
+            <Text style={styles.sessionDetail}>
+              Goal: {report.lastSession.goalTitle}
             </Text>
           </View>
         ) : (
@@ -137,7 +200,7 @@ export default function ChildReportScreen({ route, navigation }) {
                   {getCategoryName(categoryId)}
                 </Text>
                 <Text style={styles.categorySessions}>
-                  {sessions.length} session(s) - {categoryStats.passed} passed
+                  {sessions.length} session(s) • {categoryStats.passed} passed • {categoryStats.successRate}% success
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
@@ -151,9 +214,6 @@ export default function ChildReportScreen({ route, navigation }) {
                     ]} 
                   />
                 </View>
-                <Text style={styles.successRateText}>
-                  Success Rate: {categoryStats.successRate}%
-                </Text>
               </View>
             );
           })
@@ -165,9 +225,9 @@ export default function ChildReportScreen({ route, navigation }) {
       {/* Session History */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Session History</Text>
-        {child.sessions && child.sessions.length > 0 ? (
-          child.sessions.slice().reverse().map((session, index) => (
-            <View key={session.id} style={styles.sessionHistoryItem}>
+        {report.childInfo.sessions && report.childInfo.sessions.length > 0 ? (
+          report.childInfo.sessions.slice().reverse().map((session, index) => (
+            <View key={session.id || index} style={styles.sessionHistoryItem}>
               <View style={styles.sessionHeader}>
                 <Text style={styles.sessionDate}>{formatDate(session.date)}</Text>
                 <Text style={session.isPassed ? styles.sessionPassed : styles.sessionFailed}>
@@ -176,6 +236,9 @@ export default function ChildReportScreen({ route, navigation }) {
               </View>
               <Text style={styles.sessionDetail}>
                 {getCategoryName(session.categoryId)} • {session.doctorName}
+              </Text>
+              <Text style={styles.sessionDetail}>
+                Goal: {session.goalTitle}
               </Text>
               <Text style={styles.sessionDetail}>
                 Activities: {session.passCount}/5 passed
@@ -187,6 +250,15 @@ export default function ChildReportScreen({ route, navigation }) {
         )}
       </View>
 
+      {/* Debug Info - Remove in production */}
+      <View style={styles.debugSection}>
+        <Text style={styles.debugTitle}>Debug Info</Text>
+        <Text style={styles.debugText}>Child ID: {childId}</Text>
+        <Text style={styles.debugText}>Total Sessions in Context: {report.totalSessions}</Text>
+        <Text style={styles.debugText}>Last Session Date: {report.lastSession?.date || 'None'}</Text>
+        <Text style={styles.debugText}>Refresh Key: {refreshKey}</Text>
+      </View>
+
       {/* Action Buttons */}
       <View style={styles.actions}>
         <TouchableOpacity
@@ -196,6 +268,13 @@ export default function ChildReportScreen({ route, navigation }) {
           <Text style={styles.actionButtonText}>Start New Session</Text>
         </TouchableOpacity>
         
+        <TouchableOpacity
+          style={[styles.actionButton, styles.refreshButton]}
+          onPress={forceRefresh}
+        >
+          <Text style={styles.actionButtonText}>Refresh Report</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.actionButton, styles.shareButton]}
           onPress={shareReport}
@@ -216,6 +295,10 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    elevation: 2,
   },
   childName: {
     fontSize: 24,
@@ -226,6 +309,18 @@ const styles = StyleSheet.create({
   mrNumber: {
     fontSize: 16,
     color: '#6b7280',
+    marginBottom: 4,
+  },
+  lastUpdated: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  dataStatus: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '600',
   },
   section: {
     backgroundColor: '#fff',
@@ -265,13 +360,15 @@ const styles = StyleSheet.create({
   },
   progressGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   progressItem: {
     alignItems: 'center',
     padding: 12,
     borderRadius: 8,
-    width: '30%',
+    width: '48%',
+    marginBottom: 8,
   },
   totalSessions: {
     backgroundColor: '#dbeafe',
@@ -281,6 +378,9 @@ const styles = StyleSheet.create({
   },
   successRate: {
     backgroundColor: '#fef3c7',
+  },
+  goalsProgress: {
+    backgroundColor: '#f3e8ff',
   },
   progressNumber: {
     fontSize: 20,
@@ -345,11 +445,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-  successRateText: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'right',
-  },
   sessionHistoryItem: {
     backgroundColor: '#f8fafc',
     padding: 12,
@@ -391,10 +486,42 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  debugSection: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#d97706',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#92400e',
+    marginBottom: 2,
+  },
+  loadingText: {
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#6b7280',
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+    color: '#9ca3af',
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 24,
+    flexWrap: 'wrap',
   },
   actionButton: {
     flex: 1,
@@ -403,6 +530,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginHorizontal: 4,
+    marginBottom: 8,
+    minWidth: '30%',
+  },
+  refreshButton: {
+    backgroundColor: '#f59e0b',
   },
   shareButton: {
     backgroundColor: '#10b981',
@@ -410,6 +542,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

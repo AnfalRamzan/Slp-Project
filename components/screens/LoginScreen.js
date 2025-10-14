@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from "react-native";
 import {
   responsiveHeight,
   responsiveWidth,
@@ -7,11 +7,19 @@ import {
 } from "react-native-responsive-dimensions";
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const handleLogin = () => {
-    navigation.replace("Home"); // 🔹 No alert, directly navigate
+    if (username === "Doctor" && password === "slp123") {
+      navigation.replace("Home");
+    } else {
+      Alert.alert(
+        "Login Failed",
+        "Invalid credentials. Use:\nUsername: Doctor\nPassword: slp123",
+        [{ text: "OK" }]
+      );
+    }
   };
 
   return (
@@ -23,15 +31,14 @@ export default function LoginScreen({ navigation }) {
         resizeMode="contain"
       />
 
-      {/* Email Field */}
+      {/* Username Field */}
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>Username</Text>
         <TextInput
-          placeholder="Enter your email"
+          placeholder="Enter your username"
           style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
+          value={username}
+          onChangeText={setUsername}
           autoCapitalize="none"
         />
       </View>
@@ -52,6 +59,13 @@ export default function LoginScreen({ navigation }) {
       <TouchableOpacity style={styles.button} onPress={handleLogin}>
         <Text style={styles.buttonText}>Login</Text>
       </TouchableOpacity>
+
+      {/* Login Hint */}
+      <View style={styles.hintContainer}>
+        <Text style={styles.hintText}>Demo Credentials:</Text>
+        <Text style={styles.hintText}>Username: Doctor</Text>
+        <Text style={styles.hintText}>Password: slp123</Text>
+      </View>
 
       {/* Footer */}
       <View style={styles.footerContainer}>
@@ -108,6 +122,20 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: responsiveFontSize(2.2),
     fontWeight: "bold",
+  },
+  hintContainer: {
+    backgroundColor: "#f8f9fa",
+    padding: responsiveWidth(4),
+    borderRadius: 8,
+    marginTop: responsiveHeight(3),
+    borderWidth: 1,
+    borderColor: "#dee2e6",
+    alignItems: "center",
+  },
+  hintText: {
+    fontSize: responsiveFontSize(1.6),
+    color: "#6c757d",
+    marginBottom: responsiveHeight(0.5),
   },
   footerContainer: {
     position: "absolute",
