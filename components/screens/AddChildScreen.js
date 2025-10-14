@@ -28,7 +28,6 @@ export default function AddChildScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 🔽 Increased top margin for better visual balance */}
         <View style={{ marginTop: responsiveHeight(6) }}>
           <Text style={styles.title}>Add Child</Text>
 
@@ -78,9 +77,10 @@ export default function AddChildScreen({ navigation }) {
             onChangeText={setParentName}
           />
 
+          {/* ✅ Save → goes to CategoryList now */}
           <TouchableOpacity
             style={styles.saveButton}
-            onPress={() => navigation.navigate("GoalTracking")}
+            onPress={() => navigation.navigate("CategoryList")}
           >
             <Text style={styles.saveButtonText}>SAVE</Text>
           </TouchableOpacity>
@@ -102,24 +102,30 @@ export default function AddChildScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation.navigate("GoalTracking")}
+          onPress={() => navigation.navigate("CategoryList")}
         >
           <Image
             source={require("../../assets/images/target.png")}
             style={styles.navIcon}
           />
-          <Text style={styles.navText}>Goal</Text>
+          <Text style={styles.navText}>Goals</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate("LevelScreen")}
+        >
           <Image
             source={require("../../assets/images/presentation.png")}
             style={styles.navIcon}
           />
-          <Text style={styles.navText}>Sessions</Text>
+          <Text style={styles.navText}>Levels</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate("CategoryDetail")}
+        >
           <Image
             source={require("../../assets/images/report.png")}
             style={styles.navIcon}

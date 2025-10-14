@@ -1,57 +1,48 @@
 // components/screens/CategoryListScreen.js
-import React, { useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { GoalContext } from '../context/GoalContext';
+import React from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 
-export default function CategoryListScreen({ navigation }) {
-  const { disorders } = useContext(GoalContext);
+/**
+ * Lightweight category list. Data is the master list and lives inside CategoryDetailScreen
+ * (so you won't duplicate huge data). We only show main category titles here.
+ */
+
+const CATEGORY_META = [
+  { id: 1, name: "Receptive Language (F80.2)" },
+  { id: 2, name: "Expressive Language (F80.1)" },
+  { id: 3, name: "Hearing Impairment (H90)" },
+];
+
+export default function CategoryListScreen() {
+  const navigation = useNavigation();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Select Category</Text>
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Categories</Text>
 
-      {disorders.map((d, index) => {
-        const locked = !d.unlocked && !d.completed;
-        return (
-          <TouchableOpacity
-            key={d.id}
-            style={[styles.card, locked ? styles.locked : null, d.completed ? styles.completed : null]}
-            onPress={() => {
-              if (locked) return;
-              navigation.navigate('CategoryDetail', { disorderId: d.id });
-            }}
-            disabled={locked}
-          >
-            <View>
-              <Text style={styles.title}>{d.title}</Text>
-              <Text style={styles.subtitle}>
-                {d.completed ? '✅ Completed' : (d.unlocked ? '🔓 Open' : '🔒 Locked')}
-              </Text>
-            </View>
-            <Text style={styles.count}>{d.goals.filter(g => g.passed).length}/{d.goals.length}</Text>
-          </TouchableOpacity>
-        );
-      })}
+      {CATEGORY_META.map((cat) => (
+        <TouchableOpacity
+          key={cat.id}
+          style={styles.card}
+          onPress={() => navigation.navigate("CategoryDetail", { categoryId: cat.id })}
+        >
+          <Text style={styles.cardText}>{cat.name}</Text>
+        </TouchableOpacity>
+      ))}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingTop: 30, backgroundColor: '#F5F7FB', minHeight: '100%' },
-  header: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: "#f7fafc", padding: 16 },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 16, textAlign: "center" },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 14,
-    borderRadius: 10,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 10,
     elevation: 2,
   },
-  locked: { opacity: 0.6, backgroundColor: '#F0F0F0' },
-  completed: { backgroundColor: '#E8F8EE' },
-  title: { fontSize: 16, fontWeight: '700' },
-  subtitle: { fontSize: 13, color: '#666' },
-  count: { fontSize: 14, fontWeight: '700' },
+  cardText: { fontSize: 16, fontWeight: "600" },
 });
