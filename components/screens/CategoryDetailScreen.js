@@ -13,7 +13,7 @@ import { useChild } from '../context/ChildContext';
 
 export default function CategoryDetailScreen({ route, navigation }) {
   const { categoryId, categoryName } = route.params;
-  const { selectedChild, updateChildProgress, getUnlockedGoals, getCurrentGoal, getGoalSessionStatus } = useChild();
+  const { selectedChild, updateChildProgress, getUnlockedGoals, getCurrentGoal, getGoalSessionStatus, refreshTrigger } = useChild();
   const [goalBank] = useState(initialGoalBank);
   const [currentCategory, setCurrentCategory] = useState(null);
   const [unlockedGoals, setUnlockedGoals] = useState([]);
@@ -24,15 +24,22 @@ export default function CategoryDetailScreen({ route, navigation }) {
     setCurrentCategory(category);
   }, [categoryId, goalBank]);
 
+  // Refresh goals list when data changes
   useEffect(() => {
     if (selectedChild && currentCategory) {
+      console.log('🔄 REFRESHING GOALS LIST - Trigger:', refreshTrigger);
       const unlocked = getUnlockedGoals(selectedChild.id, categoryId);
       setUnlockedGoals(unlocked);
       
       const currentGoal = getCurrentGoal(selectedChild.id, categoryId);
       setCurrentActiveGoal(currentGoal);
+
+      console.log('📋 CURRENT GOALS STATE:', {
+        unlockedGoals: unlocked.map(g => g.goalId),
+        currentGoal: currentGoal?.goalId
+      });
     }
-  }, [selectedChild, currentCategory, categoryId]);
+  }, [selectedChild, currentCategory, categoryId, refreshTrigger]);
 
   // Initialize first goal if no progress exists
   useEffect(() => {
@@ -68,7 +75,7 @@ export default function CategoryDetailScreen({ route, navigation }) {
       return;
     }
 
-    console.log('Starting session for:', {
+    console.log('🎯 Starting session for:', {
       child: selectedChild.childName,
       category: currentCategory.title,
       goal: goalTitle
@@ -81,7 +88,7 @@ export default function CategoryDetailScreen({ route, navigation }) {
       goalTitle: goalTitle,
       childId: selectedChild.id,
       onSessionComplete: (sessionData) => {
-        console.log('Session completed, updating progress:', sessionData);
+        console.log('✅ Session completed, updating progress:', sessionData);
         updateChildProgress(selectedChild.id, currentCategory.id, goalId, sessionData);
         
         // Show success message
@@ -105,7 +112,7 @@ export default function CategoryDetailScreen({ route, navigation }) {
   if (!currentCategory) {
     return (
       <View style={styles.container}>
-        <Text>Loading...</Text>
+        <Text>Loading category...</Text>
       </View>
     );
   }
@@ -219,7 +226,33 @@ export default function CategoryDetailScreen({ route, navigation }) {
             {/* Consecutive Session Progress */}
             {isUnlocked && !isPassed && (
               <View style={styles.consecutiveProgress}>
-                <Text style={styles.consecutiveTitle}>Progress: {sessionStatus.consecutivePasses}/3 consecutive passes needed</Text>
+                <Text style={styles.consecutiveTitle}>
+                  Progress: {sessionStatus.consecutivePasses}/3 consecutive passes needed
+                </Text>
+                
+                {/* Streak Status Messages */}
+                {sessionStatus.streakBroken && sessionStatus.consecutivePasses === 0 && (
+                  <View style={styles.streakBrokenWarning}>
+                    <Text style={styles.streakBrokenText}>
+                      🔥 Streak broken! Start a new consecutive pass sequence.
+                    </Text>
+                  </View>
+                )}
+                {sessionStatus.streakBroken && sessionStatus.consecutivePasses > 0 && (
+                  <View style={styles.streakWarning}>
+                    <Text style={styles.streakWarningText}>
+                      ⚠️ Failed session in streak. Need {3 - sessionStatus.consecutivePasses} more consecutive passes.
+                    </Text>
+                  </View>
+                )}
+                {!sessionStatus.streakBroken && sessionStatus.consecutivePasses > 0 && (
+                  <View style={styles.streakActive}>
+                    <Text style={styles.streakActiveText}>
+                      🔥 Active streak! {sessionStatus.consecutivePasses} consecutive passes.
+                    </Text>
+                  </View>
+                )}
+                
                 <View style={styles.progressBar}>
                   {[1, 2, 3].map((step, index) => (
                     <View
@@ -227,7 +260,8 @@ export default function CategoryDetailScreen({ route, navigation }) {
                       style={[
                         styles.progressStep,
                         index < sessionStatus.consecutivePasses && styles.progressStepCompleted,
-                        index === sessionStatus.consecutivePasses && styles.progressStepCurrent
+                        index === sessionStatus.consecutivePasses && styles.progressStepCurrent,
+                        sessionStatus.streakBroken && index >= sessionStatus.consecutivePasses && styles.progressStepBroken
                       ]}
                     >
                       <Text style={[
@@ -286,7 +320,7 @@ export default function CategoryDetailScreen({ route, navigation }) {
 
             {!isUnlocked && (
               <Text style={styles.lockedMessage}>
-                Complete previous goals to unlock
+                🔒 Complete previous goals to unlock
               </Text>
             )}
           </View>
@@ -440,6 +474,48 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
+  streakBrokenWarning: {
+    backgroundColor: '#fef2f2',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+  },
+  streakBrokenText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  streakWarning: {
+    backgroundColor: '#fffbeb',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  streakWarningText: {
+    fontSize: 12,
+    color: '#d97706',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  streakActive: {
+    backgroundColor: '#f0fdf4',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  streakActiveText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   progressBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -458,6 +534,11 @@ const styles = StyleSheet.create({
   },
   progressStepCurrent: {
     backgroundColor: '#3b82f6',
+  },
+  progressStepBroken: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 2,
+    borderColor: '#fecaca',
   },
   progressStepText: {
     fontSize: 14,
