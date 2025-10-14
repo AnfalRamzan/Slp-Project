@@ -8,19 +8,51 @@ import {
   StyleSheet,
   Image,
   SafeAreaView,
+  Alert,
 } from "react-native";
 import {
   responsiveHeight,
   responsiveWidth,
   responsiveFontSize,
 } from "react-native-responsive-dimensions";
+import { useChild } from "../context/ChildContext";
 
 export default function AddChildScreen({ navigation }) {
+  const { addChild, setSelectedChild } = useChild();
   const [childName, setChildName] = useState("");
   const [mrNumber, setMrNumber] = useState("");
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("");
   const [parentName, setParentName] = useState("");
+
+  const handleSave = () => {
+    if (!childName.trim() || !mrNumber.trim()) {
+      Alert.alert("Error", "Please fill in at least Child Name and MR Number");
+      return;
+    }
+
+    const childData = {
+      childName: childName.trim(),
+      mrNumber: mrNumber.trim(),
+      dob: dob.trim(),
+      gender: gender.trim(),
+      parentName: parentName.trim(),
+    };
+
+    const newChild = addChild(childData);
+    setSelectedChild(newChild);
+    
+    Alert.alert(
+      "Success", 
+      "Child added successfully!",
+      [
+        {
+          text: "OK",
+          onPress: () => navigation.navigate("CategoryList")
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -31,7 +63,7 @@ export default function AddChildScreen({ navigation }) {
         <View style={{ marginTop: responsiveHeight(6) }}>
           <Text style={styles.title}>Add Child</Text>
 
-          <Text style={styles.label}>Child Name</Text>
+          <Text style={styles.label}>Child Name *</Text>
           <TextInput
             style={styles.input}
             placeholder="Enter Child Name"
@@ -40,7 +72,7 @@ export default function AddChildScreen({ navigation }) {
             onChangeText={setChildName}
           />
 
-          <Text style={styles.label}>MR Number</Text>
+          <Text style={styles.label}>MR Number *</Text>
           <TextInput
             style={styles.input}
             placeholder="Enter MR Number"
@@ -53,7 +85,7 @@ export default function AddChildScreen({ navigation }) {
           <Text style={styles.label}>Date of Birth</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter Date of Birth"
+            placeholder="DD/MM/YYYY"
             placeholderTextColor="#777"
             value={dob}
             onChangeText={setDob}
@@ -62,7 +94,7 @@ export default function AddChildScreen({ navigation }) {
           <Text style={styles.label}>Gender</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter Gender"
+            placeholder="Male/Female/Other"
             placeholderTextColor="#777"
             value={gender}
             onChangeText={setGender}
@@ -77,17 +109,16 @@ export default function AddChildScreen({ navigation }) {
             onChangeText={setParentName}
           />
 
-          {/* ✅ Save → goes to CategoryList now */}
           <TouchableOpacity
             style={styles.saveButton}
-            onPress={() => navigation.navigate("CategoryList")}
+            onPress={handleSave}
           >
-            <Text style={styles.saveButtonText}>SAVE</Text>
+            <Text style={styles.saveButtonText}>SAVE CHILD</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* ✅ Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navItem}
@@ -113,24 +144,13 @@ export default function AddChildScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation.navigate("LevelScreen")}
-        >
-          <Image
-            source={require("../../assets/images/presentation.png")}
-            style={styles.navIcon}
-          />
-          <Text style={styles.navText}>Levels</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("CategoryDetail")}
+          onPress={() => navigation.navigate("ChildrenList")}
         >
           <Image
             source={require("../../assets/images/report.png")}
             style={styles.navIcon}
           />
-          <Text style={styles.navText}>Report</Text>
+          <Text style={styles.navText}>Reports</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -1,204 +1,559 @@
 // components/screens/CategoryDetailScreen.js
-import React, { useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Dimensions } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { initialGoalBank } from '../data/goalBank';
+import { useChild } from '../context/ChildContext';
 
-const { width, height } = Dimensions.get("window");
+export default function CategoryDetailScreen({ route, navigation }) {
+  const { categoryId, categoryName } = route.params;
+  const { selectedChild, updateChildProgress, getUnlockedGoals, getCurrentGoal, getGoalSessionStatus } = useChild();
+  const [goalBank] = useState(initialGoalBank);
+  const [currentCategory, setCurrentCategory] = useState(null);
+  const [unlockedGoals, setUnlockedGoals] = useState([]);
+  const [currentActiveGoal, setCurrentActiveGoal] = useState(null);
 
-// === Full master goal bank ===
-const GOAL_BANK = {
-  1: {
-    id: 1,
-    name: "Receptive Language (F80.2)",
-    goals: [
-      "Localization","Joint attention","Eye contact","Respond on name","Vocalization",
-      "Non-verbal imitation","Vocal play","Identify objects","Action words","Match objects",
-      "Identify actions","Exclusion","Categorization","One-step directions","Answers simple questions",
-      "Understands prepositions","Plurals","Contrasting concepts","Identifies categories","Listens to stories",
-      "Multi-step directions","Understands time","Sequence","Identifies attributes","Pronouns",
-      "Answers story questions","What questions","Where questions","Who questions","Makes inferences",
-      "Nonliteral meanings","Proverbs","Complex grammar","Summarizes information","Understands academic topics",
-    ],
-  },
-  2: {
-    id: 2,
-    name: "Expressive Language (F80.1)",
-    goals: [
-      "Imitation","Naming","Vocabulary building","Yes/no","Action Verbs","What questions",
-      "Preposition","Locations","Where questions","Phrases","Simple sentences","Carrier phrases",
-      "Who questions","Pronouns","Plurals","Descriptive questions","Initiating conversation",
-      "When questions","How questions","Why questions","Temporal concepts","Sequencing",
-      "Inclusion questions","Exclusion questions","Narration","Storytelling","Complex sentences",
-      "Compound sentences","Hypothetical questions","Reflective questions","Question formulation",
-      "Refining conversational questioning",
-    ],
-  },
-  3: {
-    id: 3,
-    name: "Hearing Impairment (H90)",
-    goals: [
-      "Audition","Awareness","Discrimination","Identification","Comprehension","Receptive Language",
-      "Expressive Language","Cognitive","Memory for auditory tasks","Categorizes","Sequences information",
-      "Verbal reasoning","Inferential questions","Predictive questions","Speech intelligibility",
-      "Sounds in isolation","Syllables","Initial position","Final position","Middle position",
-      "Sentences","Oral reading tasks","Structured conversation","Spontaneous speech","Self-monitoring skills",
-      "Pragmatics","Initiates conversation","Maintain conversation","Takes turns","Understands social cues",
-      "Adjust communication","Literacy","Recognizes letters","Blending","Segments phonemes","Read simple words",
-      "Read sentences","Writing with correct spellings"
-    ],
-  },
-};
+  useEffect(() => {
+    const category = goalBank.find(cat => cat.id === categoryId);
+    setCurrentCategory(category);
+  }, [categoryId, goalBank]);
 
-// Helper: chunk array into levels
-const chunk = (arr, size) => {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-};
+  useEffect(() => {
+    if (selectedChild && currentCategory) {
+      const unlocked = getUnlockedGoals(selectedChild.id, categoryId);
+      setUnlockedGoals(unlocked);
+      
+      const currentGoal = getCurrentGoal(selectedChild.id, categoryId);
+      setCurrentActiveGoal(currentGoal);
+    }
+  }, [selectedChild, currentCategory, categoryId]);
 
-export default function CategoryDetailScreen() {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { categoryId } = route.params || { categoryId: 1 };
+  // Initialize first goal if no progress exists
+  useEffect(() => {
+    if (selectedChild && currentCategory && unlockedGoals.length === 0) {
+      const firstGoal = currentCategory.goals[0];
+      if (firstGoal) {
+        setUnlockedGoals([{
+          goalId: firstGoal.id,
+          sessions: [],
+          passed: false,
+          unlocked: true
+        }]);
+        setCurrentActiveGoal({
+          goalId: firstGoal.id,
+          sessions: [],
+          passed: false,
+          unlocked: true
+        });
+      }
+    }
+  }, [selectedChild, currentCategory, unlockedGoals]);
 
-  const levelSize = 5; // 5 goals per level
-  const category = GOAL_BANK[categoryId];
-
-  const levels = useMemo(() => {
-    if (!category) return [];
-    const goalObjs = category.goals.map((g, idx) => ({
-      id: `${categoryId}-G${(idx + 1).toString().padStart(3, "0")}`,
-      title: g,
-      sessionsPassed: 0,
-      passed: false,
-    }));
-    return chunk(goalObjs, levelSize).map((goalsChunk, idx) => ({
-      id: `${categoryId}-L${idx + 1}`,
-      title: `Level ${idx + 1}`,
-      goals: goalsChunk,
-      unlocked: idx === 0,
-      completed: false,
-    }));
-  }, [categoryId]);
-
-  const [levelsState, setLevelsState] = useState(levels);
-
-  const levelPercent = (level) => {
-    const total = level.goals.length || 1;
-    const passed = level.goals.filter((g) => g.passed).length;
-    return Math.round((passed / total) * 100);
-  };
-
-  const openLevel = (levelIndex) => {
-    const lv = levelsState[levelIndex];
-    if (!lv.unlocked) {
-      Alert.alert("Locked", "Complete previous level first (≥60% goals).");
+  const handleStartSession = (goalId, goalTitle) => {
+    if (!currentCategory || !selectedChild) {
+      Alert.alert("Error", "Please select a child first");
+      navigation.navigate('Home');
       return;
     }
-    if (lv.completed) {
-      Alert.alert("Completed", "This level is already passed.");
+
+    const goalProgress = unlockedGoals.find(g => g.goalId === goalId);
+    if (!goalProgress?.unlocked) {
+      Alert.alert("Goal Locked", "Complete previous goals to unlock this one.");
       return;
     }
-    navigation.navigate("LevelScreen", {
-      categoryId,
-      levelIndex,
-      levelsState,
-      onUpdate: (updatedLevelState) => {
-        const copy = [...levelsState];
-        copy[levelIndex] = updatedLevelState;
 
-        const percent = levelPercent(updatedLevelState);
-        if (percent >= 60) {
-          copy[levelIndex] = { ...copy[levelIndex], completed: true, unlocked: true };
-          if (copy[levelIndex + 1]) {
-            copy[levelIndex + 1] = { ...copy[levelIndex + 1], unlocked: true };
-            Alert.alert("Level Passed", `${copy[levelIndex].title} passed — next level unlocked.`);
-          } else {
-            Alert.alert("Category Completed", `All levels completed for ${category.name}`);
-          }
-        } else {
-          Alert.alert("Level Progress", `${percent}% — need 60% to pass.`);
-        }
-        setLevelsState(copy);
-      },
+    console.log('Starting session for:', {
+      child: selectedChild.childName,
+      category: currentCategory.title,
+      goal: goalTitle
+    });
+
+    navigation.navigate('SessionScreen', {
+      categoryId: currentCategory.id,
+      categoryName: currentCategory.title,
+      goalId: goalId,
+      goalTitle: goalTitle,
+      childId: selectedChild.id,
+      onSessionComplete: (sessionData) => {
+        console.log('Session completed, updating progress:', sessionData);
+        updateChildProgress(selectedChild.id, currentCategory.id, goalId, sessionData);
+        
+        // Show success message
+        const message = sessionData.isPassed ? 
+          `Session passed! ${sessionData.passCount}/5 activities completed successfully.` :
+          `Session completed. ${sessionData.passCount}/5 activities passed. Keep practicing!`;
+        
+        Alert.alert(
+          "Session Saved", 
+          message,
+          [{ text: "OK" }]
+        );
+      }
     });
   };
 
-  const overallPercent = () => {
-    const allGoals = levelsState.flatMap((l) => l.goals);
-    const total = allGoals.length || 1;
-    const passed = allGoals.filter((g) => g.passed).length;
-    return Math.round((passed / total) * 100);
+  const getGoalDetails = (goalId) => {
+    return currentCategory?.goals.find(g => g.id === goalId);
   };
 
-  const generateReport = () => {
-    const percent = overallPercent();
-    const pass = percent >= 30;
-    Alert.alert("Report", `Overall: ${percent}%\nResult: ${pass ? "PASS" : "FAIL"}`);
-  };
-
-  if (!category) {
+  if (!currentCategory) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Category not found</Text>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!selectedChild) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>No child selected</Text>
+        <Text style={styles.errorSubtext}>
+          Please select a child before starting therapy sessions
+        </Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Text style={styles.buttonText}>Select a Child</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={true}>
-      <Text style={styles.title}>{category.name}</Text>
-
-      <View style={styles.levelsContainer}>
-        <Text style={styles.sub}>Levels</Text>
-        {levelsState.map((level, idx) => (
-          <View key={level.id} style={styles.levelCard}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={styles.levelTitle}>{level.title}</Text>
-              <Text style={styles.levelPercent}>{levelPercent(level)}%</Text>
-            </View>
-            <Text style={styles.small}>{level.unlocked ? (level.completed ? "Completed" : "Unlocked") : "Locked"}</Text>
-            <View style={{ flexDirection: "row", marginTop: height * 0.015 }}>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: level.unlocked && !level.completed ? "#293D55" : "#9aa6bd" }]}
-                onPress={() => openLevel(idx)}
-              >
-                <Text style={styles.btnText}>Open</Text>
-              </TouchableOpacity>
-              <View style={{ width: width * 0.02 }} />
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: "#293D55" }]}
-                onPress={() => {
-                  const passed = level.goals.filter((g) => g.passed).length;
-                  Alert.alert("Level Info", `${level.title}\nGoals: ${level.goals.length}\nPassed: ${passed}`);
-                }}
-              >
-                <Text style={styles.btnText}>Info</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>{currentCategory.title}</Text>
+      
+      <View style={styles.childInfo}>
+        <Text style={styles.childInfoText}>
+          Working with: <Text style={styles.childName}>{selectedChild.childName}</Text>
+        </Text>
+        <Text style={styles.mrNumber}>MR: {selectedChild.mrNumber}</Text>
       </View>
 
-      <TouchableOpacity style={styles.reportBtn} onPress={generateReport}>
-        <Text style={styles.reportText}>Generate Report</Text>
-      </TouchableOpacity>
+      {/* Progress Overview */}
+      <View style={styles.progressOverview}>
+        <Text style={styles.progressTitle}>Progress Overview</Text>
+        <View style={styles.progressStats}>
+          <View style={styles.progressStat}>
+            <Text style={styles.progressNumber}>
+              {unlockedGoals.filter(g => g.passed).length}
+            </Text>
+            <Text style={styles.progressLabel}>Goals Completed</Text>
+          </View>
+          <View style={styles.progressStat}>
+            <Text style={styles.progressNumber}>
+              {unlockedGoals.length}
+            </Text>
+            <Text style={styles.progressLabel}>Goals Unlocked</Text>
+          </View>
+          <View style={styles.progressStat}>
+            <Text style={styles.progressNumber}>
+              {currentCategory.goals.length}
+            </Text>
+            <Text style={styles.progressLabel}>Total Goals</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.subtitle}>
+        {currentActiveGoal ? 
+          `Current Goal: ${getGoalDetails(currentActiveGoal.goalId)?.title}` :
+          'Select a goal to start a session'
+        }
+      </Text>
+
+      {/* Goals List */}
+      {currentCategory.goals.map((goal, index) => {
+        const goalProgress = unlockedGoals.find(g => g.goalId === goal.id);
+        const isUnlocked = goalProgress?.unlocked;
+        const isPassed = goalProgress?.passed;
+        const isCurrent = currentActiveGoal?.goalId === goal.id;
+        const sessionStatus = getGoalSessionStatus(selectedChild.id, categoryId, goal.id);
+        
+        const sessionStatusText = isPassed ? '✓ Completed' : 
+                                sessionStatus.consecutivePasses > 0 ? 
+                                `${sessionStatus.consecutivePasses}/3 consecutive passes` : 
+                                'Not started';
+        
+        const sessionStatusColor = isPassed ? '#10b981' : 
+                                  sessionStatus.consecutivePasses > 0 ? '#f59e0b' : '#6b7280';
+
+        return (
+          <View
+            key={goal.id}
+            style={[
+              styles.goalCard,
+              isCurrent && styles.currentGoalCard,
+              !isUnlocked && styles.lockedGoalCard
+            ]}
+          >
+            {/* Goal Header */}
+            <View style={styles.goalHeader}>
+              <View style={styles.goalTitleContainer}>
+                <Text style={[
+                  styles.goalTitle,
+                  !isUnlocked && styles.lockedGoalText,
+                  isPassed && styles.passedGoalText
+                ]}>
+                  {goal.title}
+                </Text>
+                <Text style={styles.goalId}>{goal.id}</Text>
+              </View>
+              
+              {/* Status Badge */}
+              <View style={[styles.statusBadge, { backgroundColor: sessionStatusColor + '20' }]}>
+                <Text style={[styles.statusText, { color: sessionStatusColor }]}>
+                  {sessionStatusText}
+                </Text>
+              </View>
+            </View>
+
+            {/* Consecutive Session Progress */}
+            {isUnlocked && !isPassed && (
+              <View style={styles.consecutiveProgress}>
+                <Text style={styles.consecutiveTitle}>Progress: {sessionStatus.consecutivePasses}/3 consecutive passes needed</Text>
+                <View style={styles.progressBar}>
+                  {[1, 2, 3].map((step, index) => (
+                    <View
+                      key={step}
+                      style={[
+                        styles.progressStep,
+                        index < sessionStatus.consecutivePasses && styles.progressStepCompleted,
+                        index === sessionStatus.consecutivePasses && styles.progressStepCurrent
+                      ]}
+                    >
+                      <Text style={[
+                        styles.progressStepText,
+                        index < sessionStatus.consecutivePasses && styles.progressStepTextCompleted
+                      ]}>
+                        {index < sessionStatus.consecutivePasses ? '✓' : step}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.sessionCount}>
+                  {sessionStatus.totalSessions} session(s) completed
+                </Text>
+              </View>
+            )}
+
+            {/* Session History Dots */}
+            {isUnlocked && goalProgress?.sessions && goalProgress.sessions.length > 0 && (
+              <View style={styles.sessionProgress}>
+                <Text style={styles.sessionProgressTitle}>Recent Sessions:</Text>
+                <View style={styles.sessionDots}>
+                  {goalProgress.sessions.slice(-6).map((session, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.sessionDot,
+                        session.isPassed ? styles.passedSession : styles.failedSession
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Action Button */}
+            {isUnlocked && !isPassed && (
+              <TouchableOpacity
+                style={[
+                  styles.sessionButton,
+                  isCurrent && styles.currentSessionButton
+                ]}
+                onPress={() => handleStartSession(goal.id, goal.title)}
+              >
+                <Text style={styles.sessionButtonText}>
+                  {isCurrent ? 'Continue Session' : 'Start Session'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {isPassed && (
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedText}>🎉 Goal Completed! Next goal unlocked</Text>
+              </View>
+            )}
+
+            {!isUnlocked && (
+              <Text style={styles.lockedMessage}>
+                Complete previous goals to unlock
+              </Text>
+            )}
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f7fafc" },
-  scrollContainer: { flexGrow: 1, padding: width * 0.04 },
-  title: { fontSize: width * 0.05, fontWeight: "700", marginBottom: height * 0.02, textAlign: "center" },
-  sub: { fontSize: width * 0.045, fontWeight: "600", marginBottom: height * 0.015 },
-  levelsContainer: { marginBottom: height * 0.02 },
-  levelCard: { backgroundColor: "#fff", borderRadius: 8, padding: width * 0.04, marginBottom: height * 0.015, elevation: 2 },
-  levelTitle: { fontSize: width * 0.045, fontWeight: "600" },
-  levelPercent: { fontSize: width * 0.04, fontWeight: "700", color: "#0f172a" },
-  small: { color: "#6b7280", marginTop: height * 0.005, fontSize: width * 0.035 },
-  btn: { paddingVertical: height * 0.012, paddingHorizontal: width * 0.03, borderRadius: 6 },
-  btnText: { color: "#fff", fontWeight: "700", fontSize: width * 0.04 },
-  reportBtn: { backgroundColor: "#293D55", padding: height * 0.015, borderRadius: 8, alignItems: "center", marginTop: height * 0.02 },
-  reportText: { color: "#fff", fontWeight: "700", fontSize: width * 0.045 },
+  container: {
+    flex: 1,
+    backgroundColor: '#f7fafc',
+    padding: 16,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+    color: '#1f2937',
+  },
+  childInfo: {
+    backgroundColor: '#dbeafe',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  childInfoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  childName: {
+    fontWeight: '700',
+  },
+  mrNumber: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  progressOverview: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+  },
+  progressTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  progressStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  progressNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#3b82f6',
+  },
+  progressLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  goalCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  currentGoalCard: {
+    borderColor: '#3b82f6',
+    borderWidth: 2,
+    backgroundColor: '#f0f9ff',
+  },
+  lockedGoalCard: {
+    backgroundColor: '#f3f4f6',
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  goalTitleContainer: {
+    flex: 1,
+  },
+  goalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  lockedGoalText: {
+    color: '#9ca3af',
+  },
+  passedGoalText: {
+    color: '#10b981',
+  },
+  goalId: {
+    fontSize: 12,
+    color: '#6b7280',
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  consecutiveProgress: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  consecutiveTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  progressBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  progressStep: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressStepCompleted: {
+    backgroundColor: '#10b981',
+  },
+  progressStepCurrent: {
+    backgroundColor: '#3b82f6',
+  },
+  progressStepText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6b7280',
+  },
+  progressStepTextCompleted: {
+    color: '#fff',
+  },
+  sessionCount: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  sessionProgress: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  sessionProgressTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  sessionDots: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  sessionDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  passedSession: {
+    backgroundColor: '#10b981',
+  },
+  failedSession: {
+    backgroundColor: '#ef4444',
+  },
+  sessionButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  currentSessionButton: {
+    backgroundColor: '#1d4ed8',
+  },
+  sessionButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  completedBadge: {
+    backgroundColor: '#dcfce7',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  completedText: {
+    color: '#166534',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  lockedMessage: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  errorText: {
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  errorSubtext: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#6b7280',
+  },
+  button: {
+    backgroundColor: '#3b82f6',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
 });

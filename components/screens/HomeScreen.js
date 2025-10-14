@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,47 @@ import {
   responsiveWidth,
   responsiveFontSize,
 } from "react-native-responsive-dimensions";
+import { useChild } from "../context/ChildContext"; // ✅ Fixed import path
 
 export default function HomeScreen({ navigation }) {
+  const { childrenList, setSelectedChild } = useChild();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredChildren, setFilteredChildren] = useState(childrenList);
+
+  useEffect(() => {
+    setFilteredChildren(childrenList);
+  }, [childrenList]);
+
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    if (text.trim() === "") {
+      setFilteredChildren(childrenList);
+    } else {
+      const filtered = childrenList.filter(child =>
+        child.childName.toLowerCase().includes(text.toLowerCase()) ||
+        child.mrNumber.includes(text)
+      );
+      setFilteredChildren(filtered);
+    }
+  };
+
+  const handleChildPress = (child) => {
+    setSelectedChild(child);
+    navigation.navigate("ChildReport", { childId: child.id });
+  };
+
+  const getActiveGoalsCount = (child) => {
+    let activeGoals = 0;
+    Object.values(child.goalsProgress || {}).forEach(category => {
+      Object.values(category).forEach(goal => {
+        if (!goal.sessions || goal.sessions.length < 3) {
+          activeGoals++;
+        }
+      });
+    });
+    return activeGoals;
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -31,24 +70,44 @@ export default function HomeScreen({ navigation }) {
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by MR Number"
+            placeholder="Search by Child Name or MR Number"
             placeholderTextColor="#777"
+            value={searchQuery}
+            onChangeText={handleSearch}
           />
         </View>
 
         {/* Children List */}
-        {[
-          { name: "CHILD 1", goals: 3 },
-          { name: "CHILD 2", goals: 2 },
-          { name: "CHILD 3", goals: 3 },
-          { name: "CHILD 4", goals: 3 },
-        ].map((child, index) => (
-          <View key={index} style={styles.childCard}>
-            <Text style={styles.childName}>{child.name}</Text>
-            <Text style={styles.childInfo}>MR Number: 000000000</Text>
-            <Text style={styles.childInfo}>Active Goals: {child.goals}</Text>
+        {filteredChildren.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No children found</Text>
+            <Text style={styles.emptyStateSubtext}>
+              {searchQuery ? "Try a different search term" : "Add your first child to get started"}
+            </Text>
           </View>
-        ))}
+        ) : (
+          filteredChildren.map((child, index) => (
+            <TouchableOpacity
+              key={child.id}
+              style={styles.childCard}
+              onPress={() => handleChildPress(child)}
+            >
+              <View style={styles.childHeader}>
+                <Text style={styles.childName}>{child.childName}</Text>
+                <Text style={styles.mrNumber}>MR: {child.mrNumber}</Text>
+              </View>
+              <Text style={styles.childInfo}>Age: {child.dob || 'Not specified'}</Text>
+              <Text style={styles.childInfo}>Gender: {child.gender || 'Not specified'}</Text>
+              <Text style={styles.childInfo}>
+                Active Goals: {getActiveGoalsCount(child)}
+              </Text>
+              <Text style={styles.childInfo}>
+                Total Sessions: {child.sessions ? child.sessions.length : 0}
+              </Text>
+              <Text style={styles.viewReportText}>Tap to view full report →</Text>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       {/* Floating Add Child Button */}
@@ -58,6 +117,14 @@ export default function HomeScreen({ navigation }) {
       >
         <Text style={styles.addIcon}>＋</Text>
         <Text style={styles.addText}>Add Child</Text>
+      </TouchableOpacity>
+
+      {/* View All Records Button */}
+      <TouchableOpacity
+        style={styles.recordsButton}
+        onPress={() => navigation.navigate("ChildrenList")}
+      >
+        <Text style={styles.recordsButtonText}>View All Records</Text>
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
@@ -75,35 +142,24 @@ export default function HomeScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation.navigate("GoalTracking")}
+          onPress={() => navigation.navigate("CategoryList")}
         >
           <Image
             source={require("../../assets/images/target.png")}
             style={styles.navIcon}
           />
-          <Text style={styles.navText}>Goal</Text>
+          <Text style={styles.navText}>Goals</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation.navigate("Sessions")}
-        >
-          <Image
-            source={require("../../assets/images/presentation.png")}
-            style={styles.navIcon}
-          />
-          <Text style={styles.navText}>Sessions</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Report")}
+          onPress={() => navigation.navigate("ChildrenList")}
         >
           <Image
             source={require("../../assets/images/report.png")}
             style={styles.navIcon}
           />
-          <Text style={styles.navText}>Report</Text>
+          <Text style={styles.navText}>Reports</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -116,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#D9E7F7",
   },
   scrollContent: {
-    paddingBottom: responsiveHeight(22),
+    paddingBottom: responsiveHeight(25),
     alignItems: "center",
   },
   searchContainer: {
@@ -144,6 +200,22 @@ const styles = StyleSheet.create({
     fontSize: responsiveFontSize(1.9),
     color: "#000",
   },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: responsiveHeight(5),
+  },
+  emptyStateText: {
+    fontSize: responsiveFontSize(2.2),
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: responsiveHeight(1),
+  },
+  emptyStateSubtext: {
+    fontSize: responsiveFontSize(1.8),
+    color: '#888',
+    textAlign: 'center',
+  },
   childCard: {
     backgroundColor: "#fff",
     width: "90%",
@@ -155,15 +227,33 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  childHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: responsiveHeight(1),
+  },
   childName: {
     fontSize: responsiveFontSize(2),
     fontWeight: "bold",
-    marginBottom: responsiveHeight(0.5),
     color: "#000",
+  },
+  mrNumber: {
+    fontSize: responsiveFontSize(1.6),
+    color: "#666",
+    fontWeight: '600',
   },
   childInfo: {
     fontSize: responsiveFontSize(1.7),
     color: "#333",
+    marginBottom: responsiveHeight(0.3),
+  },
+  viewReportText: {
+    fontSize: responsiveFontSize(1.6),
+    color: "#3C6E71",
+    fontWeight: '600',
+    marginTop: responsiveHeight(1),
+    textAlign: 'right',
   },
   floatingAddButton: {
     position: "absolute",
@@ -180,6 +270,27 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.3,
     shadowRadius: 4,
+  },
+  recordsButton: {
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    bottom: responsiveHeight(22),
+    left: responsiveWidth(8),
+    backgroundColor: "#293D55",
+    paddingHorizontal: responsiveWidth(4),
+    borderRadius: responsiveWidth(10),
+    height: responsiveHeight(7),
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  recordsButtonText: {
+    color: "#fff",
+    fontSize: responsiveFontSize(1.8),
+    fontWeight: "bold",
   },
   addIcon: {
     color: "#fff",
