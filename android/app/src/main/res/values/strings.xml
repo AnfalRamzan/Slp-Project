@@ -1,3 +1,7 @@
 <resources>
+<<<<<<< HEAD
     <string name="app_name">SLP</string>
+=======
+    <string name="app_name">Goal</string>
+>>>>>>> 716a368a0596bd06c8d98f4ed73b47ce5c14009b
 </resources>
